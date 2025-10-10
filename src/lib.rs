@@ -1,6 +1,6 @@
 uniffi::include_scaffolding!("floresta");
 
-use florestad::Network;
+use bitcoin::Network;
 
 /// The FFI representation of the florestad service
 ///
@@ -53,7 +53,7 @@ impl Florestad {
     /// This is equivalent to calling the `stop` rpc method.
     pub fn stop(&self) {
         self.rt.block_on(async {
-            self.florestad.stop();
+            self.florestad.stop().await;
         });
     }
     
@@ -67,7 +67,7 @@ impl Florestad {
     /// running on the background and do all the heavy lifting for you.
     pub fn start(&self) {
         self.rt.block_on(async {
-            self.florestad.start();
+            self.florestad.start().await;
         });
     }
 }
@@ -111,7 +111,6 @@ impl From<Config> for florestad::Config {
             log_to_file: true,
             log_to_stdout: false,
             assume_utreexo: false,
-            ssl_electrum_address: None,
             network: config.network.into(),
             wallet_descriptor: config.wallet_descriptor.map(|desc| vec![desc]),
             cfilters: true,

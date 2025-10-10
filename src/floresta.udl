@@ -3,6 +3,7 @@ enum Network {
     "Signet",
     "Testnet",
     "Regtest",
+    "Testnet4"
 };
 
 dictionary Config {

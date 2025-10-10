@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 uniffi = { version = "0.26.1", features = ["build", "cli"] }
-florestad = { git = "https://github.com/vinteumorg/floresta", rev = "960778caa8ddb2461f0d2834a4ae4c39a0c895f5", features = [ "experimental-p2p", "json-rpc", "compact-filters", "experimental-db"]}
-bitcoin = "0.31"
+florestad = { git = "https://github.com/vinteumorg/floresta", rev = "f1b61ff04237cd529cb88808500d44aec1b04009", features = [ "json-rpc", "compact-filters"]}
+bitcoin = "0.32.7"
 rustreexo = "0.4.0"
 tokio = "1.41.0"
 
