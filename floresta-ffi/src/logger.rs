@@ -13,18 +13,18 @@ use std::path::Path;
 
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::Layer;
-use tracing_subscriber::fmt::FmtContext;
-use tracing_subscriber::fmt::FormatEvent;
-use tracing_subscriber::fmt::FormatFields;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::layer;
 use tracing_subscriber::fmt::time::ChronoLocal;
 use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::fmt::FmtContext;
+use tracing_subscriber::fmt::FormatEvent;
+use tracing_subscriber::fmt::FormatFields;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer;
 
 pub(crate) const LOG_FILE: &str = "debug.log";
 const CHRONO_FORMATTER: &str = "%Y-%m-%d %H:%M:%S";
@@ -37,20 +37,36 @@ pub struct ShortTargetFormatter {
 
 impl ShortTargetFormatter {
     pub fn new(debug: bool) -> Self {
-        let fmt = if debug { CHRONO_FORMATTER_DEBUG } else { CHRONO_FORMATTER };
-        Self { timer: ChronoLocal::new(fmt.to_string()) }
+        let fmt = if debug {
+            CHRONO_FORMATTER_DEBUG
+        } else {
+            CHRONO_FORMATTER
+        };
+        Self {
+            timer: ChronoLocal::new(fmt.to_string()),
+        }
     }
 
     fn short_target(target: &str) -> &str {
-        if target.starts_with("floresta_chain")           { "chain" }
-        else if target.starts_with("floresta_electrum")   { "electrum" }
-        else if target.starts_with("floresta_compact_filters") { "filters" }
-        else if target.starts_with("floresta_mempool")    { "mempool" }
-        else if target.starts_with("floresta_node")       { "node" }
-        else if target.starts_with("floresta_wire")       { "wire" }
-        else if target.starts_with("floresta_watch_only") { "watch_only" }
-        else if target.starts_with("florestad")           { "florestad" }
-        else { target }
+        if target.starts_with("floresta_chain") {
+            "chain"
+        } else if target.starts_with("floresta_electrum") {
+            "electrum"
+        } else if target.starts_with("floresta_compact_filters") {
+            "filters"
+        } else if target.starts_with("floresta_mempool") {
+            "mempool"
+        } else if target.starts_with("floresta_node") {
+            "node"
+        } else if target.starts_with("floresta_wire") {
+            "wire"
+        } else if target.starts_with("floresta_watch_only") {
+            "watch_only"
+        } else if target.starts_with("florestad") {
+            "florestad"
+        } else {
+            target
+        }
     }
 }
 
@@ -95,35 +111,41 @@ pub fn start_logger(
     let is_debug = log_level >= Level::DEBUG;
 
     let make_filter = || {
-        EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new(log_level.to_string()))
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level.to_string()))
     };
 
     let fmt_layer_stdout = log_to_stdout.then(|| {
         layer()
-            .with_writer(io::stderr)   // stderr avoids iOS ATS blocking stdout
+            .with_writer(io::stderr) // stderr avoids iOS ATS blocking stdout
             .with_ansi(false)
             .event_format(ShortTargetFormatter::new(is_debug))
             .with_filter(make_filter())
     });
 
     let mut guard = None;
-    let fmt_layer_logfile = log_to_file.then(|| {
-        // Pre-create the file so we fail early with a clear message.
-        let path = datadir.join(LOG_FILE);
-        if let Err(e) = fs::OpenOptions::new().create(true).append(true).open(&path) {
-            eprintln!("[floresta-ffi] cannot open log file {}: {e}", path.display());
-            return None;
-        }
-        let file_appender = tracing_appender::rolling::never(datadir, LOG_FILE);
-        let (non_blocking, file_guard) = tracing_appender::non_blocking(file_appender);
-        guard = Some(file_guard);
-        Some(layer()
-            .with_writer(non_blocking)
-            .with_ansi(false)
-            .event_format(ShortTargetFormatter::new(is_debug))
-            .with_filter(make_filter()))
-    }).flatten();
+    let fmt_layer_logfile = log_to_file
+        .then(|| {
+            // Pre-create the file so we fail early with a clear message.
+            let path = datadir.join(LOG_FILE);
+            if let Err(e) = fs::OpenOptions::new().create(true).append(true).open(&path) {
+                eprintln!(
+                    "[floresta-ffi] cannot open log file {}: {e}",
+                    path.display()
+                );
+                return None;
+            }
+            let file_appender = tracing_appender::rolling::never(datadir, LOG_FILE);
+            let (non_blocking, file_guard) = tracing_appender::non_blocking(file_appender);
+            guard = Some(file_guard);
+            Some(
+                layer()
+                    .with_writer(non_blocking)
+                    .with_ansi(false)
+                    .event_format(ShortTargetFormatter::new(is_debug))
+                    .with_filter(make_filter()),
+            )
+        })
+        .flatten();
 
     // try_init: silently returns Err if a subscriber is already installed.
     let _ = tracing_subscriber::registry()
