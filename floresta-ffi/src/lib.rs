@@ -1,10 +1,14 @@
 uniffi::setup_scaffolding!("floresta");
 
+mod logger;
+
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use bitcoin::hashes::Hash;
+use tracing::Level;
+use tracing_appender::non_blocking::WorkerGuard;
 
 /// The Bitcoin network to run on.
 #[derive(Debug, Clone, uniffi::Enum)]
@@ -88,6 +92,8 @@ impl std::error::Error for FlorestaFfiError {}
 pub struct Florestad {
     rt: tokio::runtime::Runtime,
     florestad: floresta_node::Florestad,
+    // Must stay alive for the duration of the node to flush file logs.
+    _logger_guard: Option<WorkerGuard>,
 }
 
 #[uniffi::export]
@@ -109,9 +115,10 @@ impl Florestad {
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::temp_dir())
             .join(".floresta");
-        let config = floresta_node::Config::new(bitcoin::Network::Bitcoin, datadir);
+        let config = floresta_node::Config::new(bitcoin::Network::Bitcoin, datadir.clone());
+        let _guard = logger::start_logger(&datadir, false, true, Level::INFO);
         let florestad = floresta_node::Florestad::from_config(config);
-        Arc::new(Self { rt: _rt, florestad })
+        Arc::new(Self { rt: _rt, florestad, _logger_guard: _guard })
     }
 
     /// Create a new Floresta node with the given configuration.
@@ -124,8 +131,11 @@ impl Florestad {
             .build()
             .expect("failed to create tokio runtime");
 
+        let level = if config.debug { Level::DEBUG } else { Level::INFO };
+        let datadir = PathBuf::from(&config.datadir);
+        let _guard = logger::start_logger(&datadir, config.log_to_file, config.log_to_stdout, level);
         let florestad = floresta_node::Florestad::from_config(config.into());
-        Arc::new(Self { rt: _rt, florestad })
+        Arc::new(Self { rt: _rt, florestad, _logger_guard: _guard })
     }
 
     /// Start the node.

@@ -9,6 +9,9 @@ floresta-node = { git = "https://github.com/getfloresta/Floresta", rev = "189ad1
 bitcoin = "=0.32.8"
 rustreexo = "=0.5.0"
 tokio = "=1.52.3"
+tracing = { version = "=0.1.44", default-features = false }
+tracing-subscriber = { version = "=0.3.23", features = ["chrono", "ansi", "env-filter"] }
+tracing-appender = "=0.2.4"
 
 
 [[bin]]
@@ -16,7 +19,7 @@ name = "uniffi-bindgen"
 path = "src/uniffi-bindgen.rs"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 name = "florestad_ffi"
 
 [dev-dependencies]
