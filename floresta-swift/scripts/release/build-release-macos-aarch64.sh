@@ -169,7 +169,7 @@ PYEOF
     python3 "$TMPPY" "$SWIFT_PKG_DIR/Package.swift" "$RELEASE_URL" "$CHECKSUM"
     rm "$TMPPY"
     echo "Package.swift updated with URL: $RELEASE_URL"
-else
+elif [ -f "$SWIFT_PKG_DIR/Package.swift" ]; then
     sed -i '' "s|checksum: \"[^\"]*\"|checksum: \"$CHECKSUM\"|" "$SWIFT_PKG_DIR/Package.swift"
 fi
 

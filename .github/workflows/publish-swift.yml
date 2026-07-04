@@ -15,6 +15,8 @@ name: Publish Swift Package
 
 on:
   push:
+    branches:
+      - swift
     tags:
       - 'swift/v*'
   workflow_dispatch:
@@ -33,9 +35,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            # Strip the 'swift/' prefix from the tag name
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF_NAME#swift/}" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            # Branch push — build only, no publish
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout floresta-ffi-aki
@@ -57,19 +64,25 @@ jobs:
         run: brew install boost
 
       - name: Checkout floresta-swift
+        if: steps.version.outputs.publish == 'true'
         uses: actions/checkout@v4
         with:
           repository: aki-mizu/floresta-swift
           token: ${{ secrets.SWIFT_PACKAGE_TOKEN }}
           path: floresta-swift
 
+      - name: Create output dir (build-only mode)
+        if: steps.version.outputs.publish != 'true'
+        run: mkdir -p floresta-swift/Sources/Floresta
+
       - name: Build release XCFramework
         working-directory: floresta-ffi-aki
         env:
-          RELEASE_URL: "https://github.com/aki-mizu/floresta-swift/releases/download/${{ steps.version.outputs.tag }}/florestaFFI.xcframework.zip"
+          RELEASE_URL: ${{ steps.version.outputs.publish == 'true' && format('https://github.com/aki-mizu/floresta-swift/releases/download/{0}/florestaFFI.xcframework.zip', steps.version.outputs.tag) || '' }}
         run: bash floresta-swift/scripts/release/build-release-macos-aarch64.sh
 
       - name: Commit and push to floresta-swift
+        if: steps.version.outputs.publish == 'true'
         working-directory: floresta-swift
         run: |
           git config user.name "github-actions[bot]"
@@ -85,6 +98,7 @@ jobs:
           git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Create GitHub Release on floresta-swift
+        if: steps.version.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
           repository: aki-mizu/floresta-swift
