@@ -1,0 +1,95 @@
+# Triggered by pushing a tag of the form  swift/vX.Y.Z
+# e.g.  git tag swift/v0.2.0 && git push origin swift/v0.2.0
+#
+# Required secret: SWIFT_PACKAGE_TOKEN
+#   A Personal Access Token (or fine-grained token) on the aki-mizu account
+#   with "Contents: Read and Write" permission on aki-mizu/floresta-swift.
+#
+# What this does:
+#   1. Builds the iOS XCFramework with the release-smaller profile.
+#   2. Rewrites Package.swift in aki-mizu/floresta-swift with the release URL + checksum.
+#   3. Commits the updated Package.swift + floresta.swift and pushes to floresta-swift main.
+#   4. Creates a GitHub Release on floresta-swift and uploads florestaFFI.xcframework.zip.
+
+name: Publish Swift Package
+
+on:
+  push:
+    tags:
+      - 'swift/v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v0.2.0)'
+        required: true
+
+jobs:
+  build-and-publish:
+    runs-on: macos-latest
+
+    steps:
+      - name: Resolve release version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            # Strip the 'swift/' prefix from the tag name
+            echo "tag=${GITHUB_REF_NAME#swift/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout floresta-ffi-aki
+        uses: actions/checkout@v4
+        with:
+          path: floresta-ffi-aki
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: floresta-ffi-aki/floresta-ffi -> floresta-ffi-aki/floresta-ffi/target
+
+      - name: Install Boost (required by libbitcoinkernel cmake)
+        run: brew install boost
+
+      - name: Checkout floresta-swift
+        uses: actions/checkout@v4
+        with:
+          repository: aki-mizu/floresta-swift
+          token: ${{ secrets.SWIFT_PACKAGE_TOKEN }}
+          path: floresta-swift
+
+      - name: Build release XCFramework
+        working-directory: floresta-ffi-aki
+        env:
+          RELEASE_URL: "https://github.com/aki-mizu/floresta-swift/releases/download/${{ steps.version.outputs.tag }}/florestaFFI.xcframework.zip"
+        run: bash floresta-swift/scripts/release/build-release-macos-aarch64.sh
+
+      - name: Commit and push to floresta-swift
+        working-directory: floresta-swift
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Package.swift Sources/Floresta/floresta.swift
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Release ${{ steps.version.outputs.tag }}"
+          fi
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin main
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub Release on floresta-swift
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: aki-mizu/floresta-swift
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          files: floresta-swift/florestaFFI.xcframework.zip
+          token: ${{ secrets.SWIFT_PACKAGE_TOKEN }}
+          make_latest: true

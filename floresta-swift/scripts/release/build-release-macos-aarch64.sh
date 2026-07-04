@@ -142,8 +142,36 @@ rm -f "$ZIP_PATH"
 (cd "$SWIFT_PKG_DIR" && zip -r "$XCFRAMEWORK_NAME.xcframework.zip" "$XCFRAMEWORK_NAME.xcframework" -x "*.DS_Store")
 CHECKSUM="$(swift package compute-checksum "$ZIP_PATH")"
 
-# Patch the checksum line in Package.swift
-sed -i '' "s|checksum: \"[^\"]*\"|checksum: \"$CHECKSUM\"|" "$SWIFT_PKG_DIR/Package.swift"
+# Update Package.swift:
+#  - If RELEASE_URL is set (CI mode): rewrite the binaryTarget block to url+checksum form.
+#  - Otherwise (local mode): only patch the checksum value, leave the rest unchanged.
+if [ -n "${RELEASE_URL:-}" ]; then
+    TMPPY="$(mktemp /tmp/patch_pkg_XXXXXX.py)"
+    cat > "$TMPPY" << 'PYEOF'
+import re, sys
+pkg_path, url, checksum = sys.argv[1], sys.argv[2], sys.argv[3]
+content = open(pkg_path).read()
+new_target = (
+    '        .binaryTarget(\n'
+    f'            name: "florestaFFI",\n'
+    f'            url: "{url}",\n'
+    f'            checksum: "{checksum}"\n'
+    '        ),'
+)
+content = re.sub(
+    r'\.binaryTarget\(.*?name:\s*"florestaFFI".*?\),',
+    new_target,
+    content,
+    flags=re.DOTALL,
+)
+open(pkg_path, 'w').write(content)
+PYEOF
+    python3 "$TMPPY" "$SWIFT_PKG_DIR/Package.swift" "$RELEASE_URL" "$CHECKSUM"
+    rm "$TMPPY"
+    echo "Package.swift updated with URL: $RELEASE_URL"
+else
+    sed -i '' "s|checksum: \"[^\"]*\"|checksum: \"$CHECKSUM\"|" "$SWIFT_PKG_DIR/Package.swift"
+fi
 
 # Cleanup temp dirs
 rm -rf "$SWIFT_GEN_DIR" "$SIM_FAT_DIR" "$HEADERS_DIR" "$STUB_BASE" "$TC_BASE"
@@ -151,10 +179,12 @@ rm -rf "$SWIFT_GEN_DIR" "$SIM_FAT_DIR" "$HEADERS_DIR" "$STUB_BASE" "$TC_BASE"
 echo ""
 echo "Done! Swift package ready at: $SWIFT_PKG_DIR"
 echo "XCFramework zip: $ZIP_PATH"
-echo "Checksum (already patched into Package.swift): $CHECKSUM"
-echo ""
-echo "Next steps:"
-echo "  1. Create a GitHub Release (e.g. v0.1.0) on your floresta-swift repo"
-echo "  2. Upload $XCFRAMEWORK_NAME.xcframework.zip as the release asset"
-echo "  3. Update the 'url:' in Package.swift to match the release asset URL"
-echo "  4. Commit Package.swift + Sources/ and push"
+echo "Checksum: $CHECKSUM"
+if [ -z "${RELEASE_URL:-}" ]; then
+    echo ""
+    echo "Next steps:"
+    echo "  1. Create a GitHub Release on your floresta-swift repo"
+    echo "  2. Upload $XCFRAMEWORK_NAME.xcframework.zip as the release asset"
+    echo "  3. Update the 'url:' in Package.swift to match the release asset URL"
+    echo "  4. Commit Package.swift + Sources/ and push"
+fi
