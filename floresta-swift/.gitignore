@@ -1,0 +1,8 @@
+# SPM build cache and Xcode metadata (created when Xcode opens Package.swift here)
+.build/
+.swiftpm/
+*.DS_Store
+
+# Build artifacts produced by the scripts
+florestaFFI.xcframework/
+florestaFFI.xcframework.zip

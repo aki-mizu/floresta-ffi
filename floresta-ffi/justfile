@@ -1,6 +1,8 @@
 export ARCH := "$(uname -m)"
 export OS := "$(uname -s | tr '[:upper:]' '[:lower:]')"
 
+lib-ext := if OS == "darwin" { "dylib" } else { "so" }
+
 build:
 	cargo build --lib --release --locked
 
@@ -13,3 +15,6 @@ gen-tar: gen-python
 
 gen-kotlin: build
 	cargo run --bin uniffi-bindgen generate --library target/release/libflorestad_ffi.so --language kotlin --out-dir generated/kotlin/ --no-format
+
+gen-swift: build
+	cargo run --bin uniffi-bindgen generate --library target/release/libflorestad_ffi.{{lib-ext}} --language swift --out-dir generated/swift --no-format
